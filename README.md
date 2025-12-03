@@ -30,12 +30,9 @@ There are 894 distinct observations (456 healthy, 437 diseased), with 455 female
 |Outcome|Murmur|Proportion|
 |-------|------|----------|
 |Healthy|Absent|88%|
-|-------|------|---|
 |       |Present|6%|
-|-------|-------|--|
 |Diseased|Absent|58%|
-|--------|------|---|
-|--------|Present|33%|
+|        |Present|33%|
 
 
 
