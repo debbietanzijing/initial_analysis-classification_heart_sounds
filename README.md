@@ -42,9 +42,7 @@ Interestingly, there remains a large population of those with murmurs absent in 
 
 Distributions for both groups are largely similar
 
-## 2.3 Distribution of signal metrics in demographics 
-
-# 3. Statistical Comparison 
+# 3. Statistical and graphical Comparison 
 
 ## 3.1 Preliminary Evaluation of Feature Discrepency 
 ![Summary table of Wilcoxon rank sum test](screenshots/summary_table.jpg)
