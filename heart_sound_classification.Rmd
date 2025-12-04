@@ -1,0 +1,216 @@
+---
+title: "Classification of heart sounds using PhysioNet Challenge data "
+author: "Debbie"
+date: "2025-12-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r Requirements}
+library(dplyr)
+library(readr)
+library(tidyr)
+library(ggplot2)
+library(purrr)
+library(broom)
+```
+
+
+```{r Loading and merging dataset}
+quality_metrics <- read_csv("quality_metrics_physionet.csv")
+master <- read_csv("master_csv_physionet.csv")
+merged_data <- inner_join(quality_metrics, master, 
+                          by = c("filename" = "NewFileName"))
+
+training_data <- read_csv("training_data (physionet).csv")
+
+# Extract Patient ID from Original FileName
+merged_data <- merged_data %>%
+  mutate(Patient_ID = as.integer(sub("_.*", "", OriginalFileName))) 
+training_data <- training_data %>%
+  mutate(Patient_ID = as.integer(`Patient ID`))
+
+# Merge demographics 
+final_merged <- left_join(merged_data, training_data, by = "Patient_ID")
+
+write_csv(final_merged, "master_dataset_merged.csv")
+
+head(final_merged)
+glimpse(final_merged)
+
+```
+
+Data from PhysioNet Challenge is merged with cleaned dataset (post conversion of sound waves into numeric values). Primary key (patient identifiers) were pulled out with regex. Multiple recordings per patient will be duplicated. 
+
+```{r Initial Data Exploration}
+# Number of patients
+final_merged %>% summarise(n_distinct(Patient_ID))
+
+# Checking for missing values
+sum(is.na(final_merged))
+colSums(is.na(final_merged))
+final_merged <- final_merged %>%filter(!is.na(Outcome.x))
+dim(final_merged)
+
+# Checking for balanced data set 
+final_merged %>% 
+  group_by(Outcome.x) %>% 
+  summarise(unique= n_distinct(Patient_ID)) 
+
+# Checking on murmur quality distribution  
+final_merged %>% 
+  group_by(`Systolic murmur quality`) %>% 
+  summarise(unique= n_distinct(Patient_ID))
+
+# Checking on gender distribution 
+final_merged %>% 
+  group_by(Sex) %>%
+  summarise(unique = n_distinct(Patient_ID))
+
+# Checking on age distribution
+final_merged %>% group_by(Age) %>% 
+  summarise(unique = n_distinct(Patient_ID))
+
+# Checking on pregnancy numbers 
+final_merged %>% group_by(`Pregnancy status`) %>% 
+  summarise(unique = n_distinct(Patient_ID))
+
+# Checking on the presence of murmurs between groups
+final_merged %>% 
+  group_by(Outcome.x, Murmur) %>%
+  summarise(unique = n_distinct(Patient_ID), .groups = "drop_last") %>% 
+  mutate(prop = unique/ sum(unique))
+
+# Checking on proportion of audible location 
+final_merged %>%
+  count(`Most audible location`, sort = TRUE) %>%
+  mutate(prop = n / sum(n))
+
+# Checking on type or murmur timing associated with murmur quality for the healthy population 
+final_merged %>% filter(Outcome.x == 0) %>% 
+  group_by(`Systolic murmur timing`, `Systolic murmur quality`) %>% 
+  summarise(unique = n_distinct(Patient_ID))
+
+# Checking on type or murmur timing associated with murmur quality for the diseased population 
+final_merged %>% filter(Outcome.x == 1) %>% 
+  group_by(`Systolic murmur timing`, `Systolic murmur quality`) %>% 
+  summarise(unique = n_distinct(Patient_ID))
+
+# Extract valve site from filename
+valve_counts <- final_merged %>%
+  mutate(valve_site = sub(".*_(..)\\.wav", "\\1", OriginalFileName)) %>%
+  count(valve_site, sort = TRUE)
+
+# Checking on valve sites
+print(valve_counts)
+
+```
+  
+```{r Distribution of signal metrics}
+final_merged%>% pivot_longer(
+  cols = c(autocorr_index, crest_factor, kurtosis, low_freq_energy_ratio, sample_entropy, spectral_centroid),
+  names_to = "metric", 
+  values_to = "value") %>% 
+  ggplot(aes(x = value, fill = factor(Outcome.x))) + 
+  geom_density(alpha = 0.3) + 
+  facet_wrap(~metric, scales = 'free') + 
+  theme_minimal() + 
+  labs(fill = "Outcome")
+
+```
+```{r Wilcoxon rank sum Test}
+metrics <- c("autocorr_index", "crest_factor", "kurtosis", 
+             "low_freq_energy_ratio", "sample_entropy", "spectral_centroid")
+
+wilcox_results <- map_df(metrics, ~ { # function created to map each metric
+  test_data <- final_merged %>%
+    filter(!is.na(Outcome.x), !is.na(.data[[.x]])) %>%
+    select(Outcome.x, all_of(.x))
+  
+  test <- wilcox.test(test_data[[.x]] ~ test_data$Outcome.x, exact = FALSE) # distribution of metric between the two groups 
+  
+  tidy(test) %>%
+    mutate(metric = .x) %>%      # ✅ add the metric name here
+    select(metric, everything()) # put metric first
+})
+
+wilcox_results %>%
+  arrange(p.value)
+```
+
+```{r Distribution of signal metrics by demographics}
+mv_data <- final_merged %>%
+  filter(grepl("_MV", OriginalFileName)) %>%
+  filter(Outcome.x %in% c(0, 1))  
+
+mv_long <- mv_data %>%
+  select(Outcome.x, kurtosis, spectral_centroid, low_freq_energy_ratio, sample_entropy, autocorr_index, crest_factor) %>%
+  pivot_longer(-Outcome.x, names_to = "Metric", values_to = "Value")
+
+mv_healthy <- final_merged %>%
+  filter(grepl("_MV", OriginalFileName)) %>%
+  filter(Outcome.x == 0) %>%
+  filter(Sex %in% c("Male", "Female"))
+
+mv_healthy_long <- mv_healthy %>%
+  select(Sex, sample_entropy, spectral_centroid, crest_factor,
+         kurtosis, autocorr_index, low_freq_energy_ratio) %>%
+  pivot_longer(-Sex, names_to = "Metric", values_to = "Value")
+
+ggplot(mv_healthy_long, aes(x = Sex, y = Value, fill = Sex)) +
+  geom_boxplot() +
+  facet_wrap(~ Metric, scales = "free") +
+  labs(title = "Signal Quality Metrics by Gender (Healthy, MV only)",
+       y = "Value", x = "Sex") +
+  theme_minimal() +
+  scale_fill_manual(values = c("skyblue", "tomato"))
+
+mv_healthy <- final_merged %>%
+  filter(grepl("_MV", OriginalFileName)) %>%
+  filter(Outcome.x == 0, Age %in% c("Infant", "Child", "Adolescent"))
+
+mv_healthy_long <- mv_healthy %>%
+  select(Age, sample_entropy, spectral_centroid, crest_factor,
+         kurtosis, autocorr_index, low_freq_energy_ratio) %>%
+  pivot_longer(-Age, names_to = "Metric", values_to = "Value")
+
+ggplot(mv_healthy_long, aes(x = Age, y = Value, fill = Age)) +
+  geom_boxplot() +
+  facet_wrap(~ Metric, scales = "free") +
+  labs(title = "Signal Quality Metrics by Age (Healthy MV only)",
+       x = "Age Group", y = "Value") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r Normative values for signal metrics}
+
+mv_healthy <- final_merged %>%
+  filter(grepl("_MV", OriginalFileName)) %>%
+  filter(Outcome.x == 0)
+
+mv_normative_summary <- mv_healthy %>%
+  filter(Sex %in% c("Male", "Female"), Age %in% c("Infant", "Child", "Adolescent")) %>%
+  group_by(Age, Sex) %>%
+  summarise(
+    sample_entropy_mean = mean(sample_entropy, na.rm = TRUE),
+    sample_entropy_sd = sd(sample_entropy, na.rm = TRUE),
+    sample_entropy_p5 = quantile(sample_entropy, 0.05, na.rm = TRUE),
+    sample_entropy_p95 = quantile(sample_entropy, 0.95, na.rm = TRUE),
+
+    spectral_centroid_mean = mean(spectral_centroid, na.rm = TRUE),
+    spectral_centroid_sd = sd(spectral_centroid, na.rm = TRUE),
+    spectral_centroid_p5 = quantile(spectral_centroid, 0.05, na.rm = TRUE),
+    spectral_centroid_p95 = quantile(spectral_centroid, 0.95, na.rm = TRUE),
+
+    crest_factor_mean = mean(crest_factor, na.rm = TRUE),
+    crest_factor_sd = sd(crest_factor, na.rm = TRUE),
+    crest_factor_p5 = quantile(crest_factor, 0.05, na.rm = TRUE),
+    crest_factor_p95 = quantile(crest_factor, 0.95, na.rm = TRUE)
+  )
+mv_normative_summary
+```
