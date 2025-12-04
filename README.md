@@ -18,6 +18,7 @@ For a novel asculation devices, there is a need to create clean, standardised an
 ## 1.3 Scope and Limitation
 The data is compiled from multiple research groups across the world, recorded in different real world clinical and nonclinical environments (home visits), depending on individual protocols. It includes not only clean heart sounds, but also some noisy (poor quality) recordings. Recordings were done at the the aortic, pulmonic, tricuspid and mitral area. 
 (? short summary of how wavesound files was converted into numerical values) 
+(? explanation on signal metrics chosen) 
 
 Patient demographics were merged with the cleaned dataset, joined on `Patient ID`. There are multiple recordings for some patients- only the first value will be taken. 
 
@@ -33,6 +34,43 @@ There are 894 distinct observations (456 healthy, 437 diseased), with 455 female
 |       |Present|6%|
 |Diseased|Absent|58%|
 |        |Present|33%|
+
+Interestingly, there remains a large population of those with murmurs absent in the diseased population. This suggests that murmurs needs to be used in combination with other variables as a predictive factor. 
+
+## 2.3 Distribution of signal metrics 
+![Density plot showing distribution of key metrics](screenshots/key_metrics_density.jpg) 
+
+Distributions for both groups are largely similar
+
+## 2.3 Distribution of signal metrics in demographics 
+
+# 3. Statistical Comparison 
+
+## 3.1 Preliminary Evaluation of Feature Discrepency 
+![Summary table of Wilcoxon rank sum test](screenshots/summary_table.jpg)
+
+The Wilcoxon rank sum test was used to determine if there was a signficant difference in signal metrics between groups. In other words, are there metrics that are able to distinguish between the diseased and healthy population? 
+
+Overall, temporal and complexity based features (kurtosis, crest factor, autocorrelation index and sample entropy) show statistically significant difference between groups. On the other hand, frequency based features (spectral centroid, low- frequency ratio) did not show difference between groups, suggesting they may not be strong discriminators. 
+
+High frequency content in te heart is indicative of turbulent blood flow (stenosis, mitral regurgitation) and murmurs. This suggests that the device may not have been able to capture murmurs, potentially due to the noisy environment. This also correlates with previous findings where there remains a large population of disased individuals presenting with n absence of murmurs. 
+
+## 3.2 Freature discrepency in demographics in the healthy population  
+
+### 3.2.1 Gender 
+![Boxplot of signal metrics by Gender](screenshots/boxplot_gender.jpg)
+
+Across all features, males and females have overlapping distributions with no large shifts in medians. Crest factor and kurtosis shows more extreme outliers in males, but the central tendency remains similar. 
+Deviations in outliers may be due to males having a thicker chest wall, or inconsistent stethoscope placement in individuals. 
+
+Given a similar distribution, the device can assume gender invariant signal features, meaning that it can be interpreted the same way. Also, gender will not be a confounding factor. 
+
+### 3.2.2 Age 
+![Boxplot of signal metrics by Age](screenshots/boxplot_age.jpg)
+
+Clear age-related differences were observed across several acoustic features. Infants and young children consistently showed lower kurtosis and crest factor values, higher spectral centroids, and reduced low-frequency energy ratios compared with adolescents. These patterns align with known physiological differences in younger patients, including smaller cardiac structures, higher heart rates, and thinner chest walls, all of which tend to produce softer S1/S2 sounds and relatively greater high-frequency transmission. 
+
+The findings indicate that age has a meaningful influence on heart-sound characteristics even in healthy individuals, underscoring the need for age-specific normative ranges—particularly for infants—to ensure accurate device validation and avoid misclassification driven by normal developmental physiology.
 
 
 
